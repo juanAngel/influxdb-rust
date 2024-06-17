@@ -13,6 +13,10 @@ pub enum Error {
     /// Error happens when a query is invalid
     UrlConstructionError { error: String },
 
+    #[error("Failed to build QUERY: {error}")]
+    /// Error happens when a query is invalid
+    QueryConstructionError { error: String },
+
     #[error("http protocol error: {error}")]
     /// Error happens when a query is invalid
     ProtocolError { error: String },
