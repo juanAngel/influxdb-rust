@@ -15,10 +15,12 @@
 //! assert_eq!(client.database_name(), "test");
 //! ```
 
-use futures_util::TryFutureExt;
+use chrono::{DateTime, Utc};
+use futures_util::{AsyncReadExt, TryFutureExt};
 use http::header;
 #[cfg(feature = "reqwest")]
 use reqwest::{Client as HttpClient, RequestBuilder, Response as HttpResponse};
+use serde::de::IntoDeserializer;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Debug, Formatter};
 use std::sync::Arc;
@@ -371,6 +373,14 @@ impl<'a> QueryBodyV2<'a>{
         }
     }
 }
+#[derive(Clone, Debug,Default)]
+pub struct DataFrame {
+    pub name: String,
+    pub measurement: String,
+    pub time: DateTime<Utc>,
+    pub fields: BTreeMap<String, String>,
+    pub tags: BTreeMap<String, String>,
+}
 
 #[derive(Clone)]
 /// Internal Representation of a Client
@@ -425,33 +435,6 @@ impl Client2 {
             token: None,
             headers
         }
-    }
-
-    /// Add authentication/authorization information to [`Client`](crate::Client)
-    ///
-    /// # Arguments
-    ///
-    /// * username: The Username for InfluxDB.
-    /// * password: The Password for the user.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use influxdb::Client2;
-    ///
-    /// let _client = Client2::new("http://localhost:9086", "test").with_auth("admin", "password");
-    /// ```
-    #[must_use = "Creating a client is pointless unless you use it"]
-    pub fn with_auth<S1, S2>(mut self, username: S1, password: S2) -> Self
-    where
-        S1: Into<String>,
-        S2: Into<String>,
-    {
-        let mut with_auth = self.parameters.as_ref().clone();
-        with_auth.insert("u", username.into());
-        with_auth.insert("p", password.into());
-        self.parameters = Arc::new(with_auth);
-        self
     }
 
     /// Replaces the HTTP Client
@@ -558,7 +541,7 @@ impl Client2 {
     /// a [`Error`] variant will be returned.
     ///
     /// [`Error`]: enum.Error.html
-    pub async fn query<Q>(&self, q: Q) -> Result<String, Error>
+    pub async fn query<Q>(&self, q: Q) -> Result<BTreeMap::<(DateTime<Utc>,String,BTreeMap::<String,String>),DataFrame>, Error>
     where
         Q: Query,
     {
@@ -609,13 +592,80 @@ impl Client2 {
         })?;
 
         // todo: improve error parsing without serde
+        /*
         if s.contains("\"error\"") || s.contains("\"Error\"") {
             return Err(Error::DatabaseError {
                 error: format!("influxdb error: \"{}\"", s),
             });
+        }*/
+        let payloads = s.split("\r\n\r\n").collect::<Vec<_>>();
+
+        let mut result = BTreeMap::<(DateTime<Utc>,String,BTreeMap::<String,String>),DataFrame>::new();
+
+        for payload in  payloads{
+            let mut rdr = csv::ReaderBuilder::new()
+                        .trim(csv::Trim::All)
+                        .has_headers(true)
+                        .from_reader(payload.as_bytes());
+
+            let headers = rdr.headers()
+                            .map_err(|e|Error::DeserializationError { error: e.to_string() })?.clone();
+            
+            let iter = rdr.records();
+            
+            for it in  iter{
+                let record = it.map_err(|e|Error::DeserializationError{error: e.to_string()})?;
+                let mut measurement = None;
+                let mut key = None;
+                let mut value = None;
+                let mut tags = BTreeMap::<String,String>::new();
+                let mut time = None;
+
+                for i in 0..headers.len(){
+                    match &headers[i] {
+                        "_start" => (),
+                        "_stop" => (),
+                        "table" => (),
+                        "_time" => {
+                            time = Some(DateTime::parse_from_rfc3339(&record[i])
+                                .map(|v|v.naive_utc().and_utc())
+                                .map_err(|e|Error::DeserializationError{error: e.to_string()})?);
+                        },
+                        "_value" => value = Some(&record[i]),
+                        "_field" => key = Some(&record[i]),
+                        "_measurement" => measurement = Some(&record[i]),
+                        t => {
+                            tags.insert(t.into(), record[i].into());
+                        }
+                    };
+                }
+                let time = time.ok_or(Error::DeserializationError { error: "".into() })?;
+                let measurement = measurement.ok_or(Error::DeserializationError { error: "".into() })?.to_string();
+                let key = key.ok_or(Error::DeserializationError { error: "".into() })?;
+                let value = value.ok_or(Error::DeserializationError { error: "".into() })?;
+                let entry_key = (time,measurement.clone(),tags.clone());
+
+                //Agrega campos a un DF existente o inserta uno nuevo
+                result.entry(entry_key)
+                    .and_modify(|v|{
+                        v.fields.insert(key.into(), value.into());
+                    })
+                    .or_insert({
+                        let mut fields = BTreeMap::new();
+                        fields.insert(key.into(), value.into());
+                        DataFrame{
+                            measurement,
+                            time,
+                            tags,
+                            fields,
+                            ..Default::default()
+                        }
+                    });
+            }
         }
 
-        Ok(s)
+
+        Ok(result)
     }
 
     fn auth_if_needed(&self, rb: RequestBuilder) -> RequestBuilder {
