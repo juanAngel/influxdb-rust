@@ -226,7 +226,7 @@ impl PartialEq<&str> for ValidQuery {
 pub enum QueryType {
     ReadQuery,
     /// write query with precision
-    WriteQuery(String),
+    WriteQuery(String,Option<String>),
 }
 
 #[cfg(test)]

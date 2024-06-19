@@ -33,6 +33,7 @@ pub struct WriteQuery {
     tags: Vec<(String, Type)>,
     measurement: String,
     timestamp: Timestamp,
+    bucket: Option<String>
 }
 
 impl WriteQuery {
@@ -47,6 +48,7 @@ impl WriteQuery {
             tags: vec![],
             measurement: measurement.into(),
             timestamp,
+            bucket: None
         }
     }
 
@@ -105,6 +107,9 @@ impl WriteQuery {
             Timestamp::Hours(_) => "h",
         };
         modifier.to_string()
+    }
+    pub fn set_bucket(&mut self,v:&str){
+        self.bucket = Some(v.into());
     }
 }
 
@@ -238,7 +243,7 @@ impl Query for WriteQuery {
     }
 
     fn get_type(&self) -> QueryType {
-        QueryType::WriteQuery(self.get_precision())
+        QueryType::WriteQuery(self.get_precision(),self.bucket.clone())
     }
 }
 
@@ -266,11 +271,13 @@ impl Query for Vec<WriteQuery> {
     }
 
     fn get_type(&self) -> QueryType {
-        QueryType::WriteQuery(
-            self.first()
-                .map(|q| q.get_precision())
+        let t = self.first()
+                .map(|q| (q.get_precision(),None))
                 // use "ms" as placeholder if query is empty
-                .unwrap_or_else(|| "ms".to_owned()),
+                .unwrap_or_else(|| ("ms".to_owned(),None));
+        QueryType::WriteQuery(
+            t.0,
+            t.1
         )
     }
 }
@@ -391,7 +398,7 @@ mod tests {
             .add_tag("location", "us-midwest")
             .add_tag("season", "summer");
 
-        assert_eq!(query.get_type(), QueryType::WriteQuery("h".to_owned()));
+        assert_eq!(query.get_type(), QueryType::WriteQuery("h".to_owned(),None));
     }
 
     #[test]

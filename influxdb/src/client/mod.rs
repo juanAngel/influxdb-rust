@@ -249,7 +249,7 @@ impl Client {
                     self.client.post(url).query(&parameters)
                 }
             }
-            QueryType::WriteQuery(precision) => {
+            QueryType::WriteQuery(precision,_) => {
                 let url = &format!("{}/write", &self.url);
                 let mut parameters = self.parameters.as_ref().clone();
                 parameters.insert("precision", precision);
@@ -557,10 +557,13 @@ impl Client2 {
                 
                 self.client.post(url).headers(self.headers.clone()).body(read_query).query(&parameters)
             }
-            QueryType::WriteQuery(precision) => {
-                let url = &format!("{}/write", &self.url);
+            QueryType::WriteQuery(precision,bucket) => {
+                let url = &format!("{}/api/v2/write", &self.url);
                 //let mut parameters = self.parameters.as_ref().clone();
                 parameters.insert("precision", precision);
+                if let Some(bucket) = bucket {
+                    parameters.insert("bucket", bucket);
+                }
 
                 self.client.post(url).body(query.get()).query(&parameters)
             }
