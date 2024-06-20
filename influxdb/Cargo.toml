@@ -11,6 +11,7 @@ repository = "https://github.com/influxdb-rs/influxdb-rust"
 version = "0.7.2"
 [dependencies]
 csv = "*"
+log = "0.4.19"
 futures-util = "0.3.17"
 http = "0.2.4"
 lazy-regex = "3.1"

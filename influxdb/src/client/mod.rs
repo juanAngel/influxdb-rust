@@ -305,6 +305,7 @@ impl Client {
 pub(crate) fn check_status(res: &HttpResponse) -> Result<(), Error> {
     let status = res.status();
     if !status.is_success() {
+        log::debug!("url: {:} error: {:?}",res.url().clone(),res.status());
         return Err(Error::ApiError(status.into()));
     }
     Ok(())
