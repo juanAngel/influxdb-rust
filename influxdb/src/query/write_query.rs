@@ -108,8 +108,12 @@ impl WriteQuery {
         };
         modifier.to_string()
     }
-    pub fn set_bucket(&mut self,v:&str){
+    pub fn get_bucket(&self) -> Option<String>{
+        self.bucket.clone()
+    }
+    pub fn set_bucket(mut self,v:&str) ->Self{
         self.bucket = Some(v.into());
+        self
     }
 }
 
@@ -243,7 +247,7 @@ impl Query for WriteQuery {
     }
 
     fn get_type(&self) -> QueryType {
-        QueryType::WriteQuery(self.get_precision(),self.bucket.clone())
+        QueryType::WriteQuery(self.get_precision(),self.get_bucket())
     }
 }
 
@@ -272,7 +276,7 @@ impl Query for Vec<WriteQuery> {
 
     fn get_type(&self) -> QueryType {
         let t = self.first()
-                .map(|q| (q.get_precision(),None))
+                .map(|q| (q.get_precision(),q.get_bucket()))
                 // use "ms" as placeholder if query is empty
                 .unwrap_or_else(|| ("ms".to_owned(),None));
         QueryType::WriteQuery(
