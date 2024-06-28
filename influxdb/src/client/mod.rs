@@ -30,7 +30,6 @@ use surf::{Client as HttpClient, RequestBuilder, Response as HttpResponse};
 use crate::query::QueryType;
 use crate::Error;
 use crate::Query;
-use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
 /// Internal Representation of a Client
@@ -361,28 +360,6 @@ mod tests {
     }
 }
 
-#[derive(Serialize)]
-struct QueryBodyV2<'a>{
-    query:&'a str,
-    r#type:&'static str
-}
-impl<'a> QueryBodyV2<'a>{
-    fn new(query:&str) -> QueryBodyV2{
-        QueryBodyV2{
-            r#type:"flux",
-            query
-        }
-    }
-}
-#[derive(Clone, Debug,Default)]
-pub struct DataFrame {
-    pub name: String,
-    pub measurement: String,
-    pub time: DateTime<Utc>,
-    pub fields: BTreeMap<String, String>,
-    pub tags: BTreeMap<String, String>,
-}
-
 #[derive(Clone)]
 /// Internal Representation of a Client
 pub struct Client2 {
@@ -542,7 +519,7 @@ impl Client2 {
     /// a [`Error`] variant will be returned.
     ///
     /// [`Error`]: enum.Error.html
-    pub async fn query<Q>(&self, q: Q) -> Result<BTreeMap::<(DateTime<Utc>,String,BTreeMap::<String,String>),DataFrame>, Error>
+    pub async fn query<Q>(&self, q: Q) -> Result<String, Error>
     where
         Q: Query,
     {
@@ -602,74 +579,10 @@ impl Client2 {
                 error: format!("influxdb error: \"{}\"", s),
             });
         }*/
-        let payloads = s.split("\r\n\r\n").collect::<Vec<_>>();
-
-        let mut result = BTreeMap::<(DateTime<Utc>,String,BTreeMap::<String,String>),DataFrame>::new();
-
-        for payload in  payloads{
-            let mut rdr = csv::ReaderBuilder::new()
-                        .trim(csv::Trim::All)
-                        .has_headers(true)
-                        .from_reader(payload.as_bytes());
-
-            let headers = rdr.headers()
-                            .map_err(|e|Error::DeserializationError { error: e.to_string() })?.clone();
-            
-            let iter = rdr.records();
-            
-            for it in  iter{
-                let record = it.map_err(|e|Error::DeserializationError{error: e.to_string()})?;
-                let mut measurement = None;
-                let mut key = None;
-                let mut value = None;
-                let mut tags = BTreeMap::<String,String>::new();
-                let mut time = None;
-
-                for i in 0..headers.len(){
-                    match &headers[i] {
-                        "_start" => (),
-                        "_stop" => (),
-                        "table" => (),
-                        "_time" => {
-                            time = Some(DateTime::parse_from_rfc3339(&record[i])
-                                .map(|v|v.naive_utc().and_utc())
-                                .map_err(|e|Error::DeserializationError{error: e.to_string()})?);
-                        },
-                        "_value" => value = Some(&record[i]),
-                        "_field" => key = Some(&record[i]),
-                        "_measurement" => measurement = Some(&record[i]),
-                        t => {
-                            tags.insert(t.into(), record[i].into());
-                        }
-                    };
-                }
-                let time = time.ok_or(Error::DeserializationError { error: "".into() })?;
-                let measurement = measurement.ok_or(Error::DeserializationError { error: "".into() })?.to_string();
-                let key = key.ok_or(Error::DeserializationError { error: "".into() })?;
-                let value = value.ok_or(Error::DeserializationError { error: "".into() })?;
-                let entry_key = (time,measurement.clone(),tags.clone());
-
-                //Agrega campos a un DF existente o inserta uno nuevo
-                result.entry(entry_key)
-                    .and_modify(|v|{
-                        v.fields.insert(key.into(), value.into());
-                    })
-                    .or_insert({
-                        let mut fields = BTreeMap::new();
-                        fields.insert(key.into(), value.into());
-                        DataFrame{
-                            measurement,
-                            time,
-                            tags,
-                            fields,
-                            ..Default::default()
-                        }
-                    });
-            }
-        }
+        //let payloads = s.split("\r\n\r\n").collect::<Vec<_>>();
 
 
-        Ok(result)
+        Ok(s)
     }
 
     fn auth_if_needed(&self, rb: RequestBuilder) -> RequestBuilder {

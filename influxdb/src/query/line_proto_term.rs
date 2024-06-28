@@ -93,8 +93,8 @@ mod test {
     fn test() {
         assert_eq!(TagValue(&Type::Boolean(true)).escape(), r#"true"#);
         assert_eq!(TagValue(&Type::Float(1.8324f64)).escape(), r#"1.8324"#);
-        assert_eq!(TagValue(&Type::SignedInteger(-1i64)).escape(), r#"-1"#);
-        assert_eq!(TagValue(&Type::UnsignedInteger(1u64)).escape(), r#"1"#);
+        assert_eq!(TagValue(&Type::SignedInteger(-1i128)).escape(), r#"-1"#);
+        assert_eq!(TagValue(&Type::UnsignedInteger(1u128)).escape(), r#"1"#);
 
         assert_eq!(
             TagValue(&Type::Text("this is my special string".into())).escape(),

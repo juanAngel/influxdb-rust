@@ -121,8 +121,8 @@ impl WriteQuery {
 pub enum Type {
     Boolean(bool),
     Float(f64),
-    SignedInteger(i64),
-    UnsignedInteger(u64),
+    SignedInteger(i128),
+    UnsignedInteger(u128),
     Text(String),
 }
 
@@ -153,8 +153,8 @@ macro_rules! from_impl {
 }
 from_impl! {Boolean => bool}
 from_impl! {Float => f32, f64}
-from_impl! {SignedInteger => i8, i16, i32, i64}
-from_impl! {UnsignedInteger => u8, u16, u32, u64}
+from_impl! {SignedInteger => i8, i16, i32, i64, i128}
+from_impl! {UnsignedInteger => u8, u16, u32, u64, u128}
 from_impl! {Text => String}
 impl From<&str> for Type {
     fn from(b: &str) -> Self {

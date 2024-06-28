@@ -50,7 +50,7 @@ mod de;
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 
-use crate::{client::check_status, Client, Error, Query, ReadQuery};
+use crate::{client::check_status, Client,Client2, Error, Query, ReadQuery};
 
 #[derive(Deserialize)]
 #[doc(hidden)]
@@ -182,5 +182,37 @@ impl Client {
                 error: format!("serde error: {}", err),
             }
         })
+    }
+}
+impl Client2 {
+    pub async fn csv_query<T>(&self, q: ReadQuery) -> Result<Vec<T>, Error>
+        where T: DeserializeOwned
+        {
+
+        let s = self.query(q).await?;
+        let payloads = s.split("\r\n\r\n").collect::<Vec<_>>();
+
+        let mut result = vec![];
+        for r in payloads {
+            let mut rdr = csv::ReaderBuilder::new()
+                        .has_headers(true)
+                        .trim(csv::Trim::All)
+                        .from_reader(r.as_bytes());
+
+            let headers = rdr.headers()
+                    .map_err(|e|Error::DeserializationError { error: e.to_string() })?.clone();
+            let records = rdr.records();
+
+
+            for it in  records{
+                let record = it
+                    .map_err(|e|Error::DeserializationError { error: e.to_string() })?;
+                let value = record.deserialize::<T>(Some(&headers))
+                    .map_err(|e|Error::DeserializationError { error: e.to_string() })?;
+                result.push(value);
+            }
+        }
+        
+        Ok(result)
     }
 }
